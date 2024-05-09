@@ -4,6 +4,10 @@
 #define THREAD_MAIN 1
 #define THREAD_CHILD 2
 
+#define MAX_FRAME_SIZE 50
+#define MAX_PACKET_SIZE 50
+#define SLEEP_TIME 10000U
+
 /* TODO 第二节课新增 --- start */
 // 错误代码
 // 打不开视频

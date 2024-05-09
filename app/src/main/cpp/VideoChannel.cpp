@@ -2,11 +2,21 @@
 
 VideoChannel::VideoChannel(int i, AVCodecContext *cContext)
         : BaseChannel(i, cContext) {
-
+    // 1.1 创建上下文环境
+     swsContext = sws_getContext(cContext->width,
+                                            cContext->height,
+                                            codecContext->pix_fmt,
+                                            cContext->width,
+                                            cContext->height,
+                                            AV_PIX_FMT_RGBA,
+                                            SWS_BILINEAR,
+                                            nullptr,
+                                            nullptr,
+                                            nullptr);
 }
 
 VideoChannel::~VideoChannel() {
-
+    sws_freeContext(swsContext);
 }
 
 void VideoChannel::stop() {
@@ -39,22 +49,28 @@ void VideoChannel::start() {
     pthread_create(&pid_video_play, nullptr, task_video_play, this);
 }
 
+
 void VideoChannel::video_decode() {
     AVPacket *packet = nullptr;
     while (isPlaying) {
+        if (isPlaying && frames.size() > MAX_FRAME_SIZE) {
+            av_usleep(SLEEP_TIME);
+            continue;
+        }
         int ret = packets.pop(packet);
         // 阻塞式的，所以要判断是否正在播放
         if (!isPlaying) {
             break;
         }
         if (!ret) {
+            freePacket(&packet);
             continue;
         }
         // 发送数据包到解码器
+        // !!! 同样生产者队列要对数据进行控制，等待被消费。
         ret = avcodec_send_packet(codecContext, packet);
         // 发送完成后，释放数据包，因为ffmpeg是拷贝了一份数据包
-//        av_packet_free(&packet);
-//        packet = nullptr;
+        freePacket(&packet);
 
         if (ret) {
             break;
@@ -64,45 +80,35 @@ void VideoChannel::video_decode() {
         ret = avcodec_receive_frame(codecContext, frame);
         // 如果没有数据，或者数据解码失败
         if (ret == AVERROR(EAGAIN)) {
+            freeFrame(&frame);
             continue;
         } else if (ret != 0) {
+            // 如果出错，有值就需要释放
+            freeFrame(&frame);
             break;
         }
         // 将解码后的数据放入队列
         frames.push(frame);
     }
-    av_packet_free(&packet);
-    packet = nullptr;
+    freePacket(&packet);
 }
 
 void VideoChannel::video_play() {
     // YUV --> RGBA --> NativeWindow
     AVFrame *frame = nullptr;
-    uint8_t *rgb_dst[4];
-    int rgb_dstStride[4];
-
     while (isPlaying) {
         int ret = frames.pop(frame);
         if (!isPlaying) {
+            freeFrame(&frame);
             break;
         }
         if (!ret) {
+            freeFrame(&frame);
             continue;
         }
 
         // 渲染
         // 1. 将AVFrame转换成RGB格式
-        // 1.1 创建上下文环境
-        SwsContext *swsContext = sws_getContext(frame->width,
-                                                frame->height,
-                                                codecContext->pix_fmt,
-                                                frame->width,
-                                                frame->height,
-                                                AV_PIX_FMT_RGBA,
-                                                SWS_BILINEAR,
-                                                nullptr,
-                                                nullptr,
-                                                nullptr);
         // 1.2 申请RGBA格式的内存空间
         av_image_alloc(rgb_dst,
                        rgb_dstStride,
@@ -129,13 +135,10 @@ void VideoChannel::video_play() {
 
 
         // 5. 释放资源
-        av_frame_free(&frame);
-        frame = nullptr;
-        av_freep(&rgb_dst);
-        sws_freeContext(swsContext);
+        freeFrame(&frame);
+        av_freep(&rgb_dst[0]);
     }
-    av_frame_free(&frame);
-    frame = nullptr;
+    freeFrame(&frame);
     isPlaying = false;
 }
 

@@ -4,6 +4,50 @@ AudioChannel::AudioChannel(int i, AVCodecContext *cContext)
         : BaseChannel(i, cContext) {
 
 
+    // 2. 重采样 音频三要素：声道数、采样位数、采样率
+    // 2.1 获取声道数
+    out_channels = 2;//frame->ch_layout.nb_channels;//av_get_channel_layout_nb_channels(AV_CH_LAYOUT_STEREO);好像没有这个函数
+    // 2.2 获取采样位数
+    out_samplesize = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
+    // 2.3 获取采样率
+    out_sample_rate = 44100;
+    // 这样一来，我们就确定了输出视频的格式，而输入视频的格式存储在frame中。
+    // 2.6.1 创建SwrContext
+    // 这边应该是ffmpeg7.0.0版本的问题，swr_alloc_set_opts已经被废弃了，需要使用swr_alloc_set_opts2
+    AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+    swr_alloc_set_opts2(&swrContext,
+                        &out_ch_layout,
+                        AV_SAMPLE_FMT_S16,
+                        out_sample_rate,
+                        &(cContext->ch_layout),
+                        static_cast<AVSampleFormat>(cContext->sample_fmt),
+                        cContext->sample_rate,
+                        0, nullptr);
+    LOGI("cContext->sample_rate:%d", cContext->sample_rate);
+//    swr_alloc_set_opts2(&swrContext,
+//                              &out_ch_layout,
+//                              AV_SAMPLE_FMT_S16,
+//                              out_sample_rate,
+//                              &(frame->ch_layout),
+//                              static_cast<AVSampleFormat>(frame->format),
+//                              in_sample_rate,
+//                              0, nullptr);
+
+    if (swrContext) {
+        // 必须要初始化一下。
+        swr_init(swrContext);
+    }
+    // 2.4 进行临时性的大小计算，因为如果不计算，你就无法预先开辟空间。
+    // 而实际上的大小需要根据系统计算出来实际的size，换句话说，先有空间再有大小。
+    // swr_get_out_samples(swrContext, frame->nb_samples)
+    // 这个就是系统帮助你获取的最大可能空间量，保证不溢出，虽然可能有少许空间浪费，但也是正常的。
+    out_buffer_size_pre =
+            out_channels * out_samplesize * swr_get_out_samples(swrContext, 1024);
+    // 2.5 创建缓冲区
+    // 根据计算的临时大小开辟堆空间（注意要回收）
+    if (!out_buffer) {
+        out_buffer = static_cast<uint8_t *>(av_malloc(out_buffer_size_pre));
+    }
 }
 
 AudioChannel::~AudioChannel() {
@@ -15,14 +59,14 @@ void AudioChannel::stop() {
 }
 
 void *task_audio_decode(void *args) {
-    AudioChannel *videoChannel = static_cast<AudioChannel *>(args);
-    videoChannel->audio_decode();
+    AudioChannel *audioChannel = static_cast<AudioChannel *>(args);
+    audioChannel->audio_decode();
     return nullptr;
 }
 
 void *task_audio_play(void *args) {
-    AudioChannel *videoChannel = static_cast<AudioChannel *>(args);
-    videoChannel->audio_play();
+    AudioChannel *audioChannel = static_cast<AudioChannel *>(args);
+    audioChannel->audio_play();
     return nullptr;
 }
 
@@ -31,83 +75,9 @@ void *task_audio_play(void *args) {
 void audioBufferCallback(SLBufferQueueItf caller, void *pContext) {
     // 获取环境对象，否则无法操作
     AudioChannel *audioChannel = static_cast<AudioChannel *>(pContext);
-    uint8_t *out_buffer = nullptr;
-    // 需要计算的重采样之后的数据大小。之所以有actual，是因为需要提前开辟空间，有个临时的size。（不够准确）
-    int out_buffer_size_actual = 0;
-    while (audioChannel->isPlaying){
-        // 1. 从队列中取出一个AVFrame
-        int ret = 0;
-        AVFrame *frame = nullptr;
-        ret = audioChannel->frames.pop(frame);
-        if (!ret) {
-            continue;
-        }
-        if (!audioChannel->isPlaying) {
-            break;
-        }
-        // 2. 重采样 音频三要素：声道数、采样位数、采样率
-        // 2.1 获取声道数
-        int out_channels = frame->ch_layout.nb_channels;//av_get_channel_layout_nb_channels(AV_CH_LAYOUT_STEREO);好像没有这个函数
-        // 2.2 获取采样位数
-        int out_samplesize = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
-        // 2.3 获取采样率
-        int out_sample_rate = 44100;
-        // 这样一来，我们就确定了输出视频的格式，而输入视频的格式存储在frame中。
-        // 2.6 重采样
-        // 2.6.1 创建SwrContext
-        AVChannelLayout out_ch_layout = AV_CHANNEL_LAYOUT_STEREO;
-        SwrContext *swrContext = nullptr;
-        // 输入视频的采样率（测试视频的是48000hz,2声道,16bit仅供参考）
-        int in_sample_rate = frame->sample_rate;
-        // 这边应该是ffmpeg7.0.0版本的问题，swr_alloc_set_opts已经被废弃了，需要使用swr_alloc_set_opts2
-        ret = swr_alloc_set_opts2(&swrContext,
-                                  &out_ch_layout,
-                                  AV_SAMPLE_FMT_S16,
-                                  out_sample_rate,
-                                  &(frame->ch_layout),
-                                  static_cast<AVSampleFormat>(frame->format),
-                                  in_sample_rate,
-                                  0, nullptr);
-        if (!swrContext) {
-            continue;
-        }
-        // 必须要初始化一下。
-        swr_init(swrContext);
-        // 2.4 进行临时性的大小计算，因为如果不计算，你就无法预先开辟空间。
-        // 而实际上的大小需要根据系统计算出来实际的size，换句话说，先有空间再有大小。
-        // swr_get_out_samples(swrContext, frame->nb_samples)
-        // 这个就是系统帮助你获取的最大可能空间量，保证不溢出，虽然可能有少许空间浪费，但也是正常的。
-        int out_buffer_size_temp = out_channels * out_samplesize * swr_get_out_samples(swrContext, frame->nb_samples);
-        // 2.5 创建缓冲区
-        // 根据计算的临时大小开辟堆空间（注意要回收）
-        out_buffer = static_cast<uint8_t *>(av_malloc(out_buffer_size_temp));
-        // 计算转换后的sample个数 a * b / c
-        // 要注意这个nb_samples的含义，它就是指每次回调之后，这一个数据包所持续时间内的采样数，也就是一帧的时间x采样率。
-        // 但是这个输入采样数是系统给的，千万不能自己算，这里打印输出是1024，大体上是0.021s，也就是48000x0.021（大约）
-        int in_nb_samples = frame->nb_samples;
-        // 这里通过av_rescale_rnd计算输出样本数，也是指相同时间内输出的样本个数，用来保证不同频率下时间一致，因为不同频率采集的样本量是不同的。
-        // 但也要明白这里只是理论上，实际上会有一定出入，所以这里并不是最终答案。
-        // av_rescale_rnd 这个本身是ffmpeg方舟数据溢出的算法，本质等于 axb/c 也就是 1024 * 44100 / 48000 = 941（向上取整）跟打印输出一致。
-        int out_nb_samples = av_rescale_rnd(
-                swr_get_delay(swrContext, in_sample_rate) + in_nb_samples,
-                out_sample_rate, in_sample_rate, AV_ROUND_UP);
-        // 2.6.2 重采样 这里是真正执行，也就是把重采样的数据放到out_buffer当中，而返回值就是真正意义上的重采样后的输出样本数。
-        int out_convert_samples = swr_convert(swrContext, &out_buffer, out_nb_samples, frame->data, in_nb_samples);
-        if (ret < 0) {
-            continue;
-        }
-        // 3. 播放
-        // 为什么传递自己进去，因为不是C++没有this指针
-        // const void *pBuffer : 这是一个指向缓冲区的指针，表示要播放的音频数据。这里是PCM数据。
-        // SLuint32 out_buffer_size_actual : 这是一个无符号整数，表示要播放的音频数据的大小。这里是PCM数据的大小。
-        // 实际数值就是：实际样本数x位数x通道数
-        out_buffer_size_actual = static_cast<SLuint32>(out_convert_samples * out_channels * out_samplesize);
-        break;
-    }
-    // 输出数据，输出数据大小，就是这么得到的。
-    (*caller)->Enqueue(caller, out_buffer, out_buffer_size_actual);
-    av_free(out_buffer);
-    out_buffer = nullptr;
+    int pcm_size = audioChannel->get_pcm_size();
+    (*caller)->Enqueue(caller, audioChannel->out_buffer, pcm_size);
+    // 释放out_buffer
 }
 
 // 1. 解码，把队列中的数据包取出来，解码，再放入队列中。(AvPacket -> AvFrame)
@@ -131,32 +101,41 @@ void AudioChannel::start() {
 void AudioChannel::audio_decode() {
     AVPacket *packet = nullptr;
     while (isPlaying) {
+        if (isPlaying && frames.size() > MAX_FRAME_SIZE) {
+            av_usleep(SLEEP_TIME);
+            continue;
+        }
         int ret = packets.pop(packet);
         // 阻塞式的，所以要判断是否正在播放
         if (!isPlaying) {
             break;
         }
         if (!ret) {
+            freePacket(&packet);
             continue;
         }
         // 发送数据包到解码器
         ret = avcodec_send_packet(codecContext, packet);
         // 发送完成后，释放数据包，因为ffmpeg是拷贝了一份数据包
-//        av_packet_free(&packet);
-//        packet = nullptr;
+        freePacket(&packet);
+        if (ret) {
+            break;
+        }
         AVFrame *frame = av_frame_alloc();
         ret = avcodec_receive_frame(codecContext, frame);
         // 有可能音频帧也会获取失败，需要重新获取
         if (ret == AVERROR(EAGAIN)) {
+            freeFrame(&frame);
             continue;
         } else if (ret) {
+            // 如果出错，有值就需要释放
+            freeFrame(&frame);
             break;
         }
         // 音频是压缩的，需要解码成PCM格式
         frames.push(frame);
     }
-    av_packet_free(&packet);
-    packet = nullptr;
+    freePacket(&packet);
 }
 
 void AudioChannel::audio_play() {
@@ -165,7 +144,6 @@ void AudioChannel::audio_play() {
 
     // 1. 创建引擎
     // 1.1 创建引擎对象：SLObjectItf engineObject
-    SLObjectItf engineObject = nullptr;
     result = slCreateEngine(&engineObject, 0, nullptr, 0, nullptr, nullptr);
     if (SL_RESULT_SUCCESS != result) {
         LOGI("创建引擎对象失败");
@@ -184,7 +162,6 @@ void AudioChannel::audio_play() {
     // SL_IID_ENGINE 表示获取引擎接口
     // SL_IID_OUTPUTMIX 表示获取混音器接口
     // SL_IID_BUFFERQUEUE 表示获取缓冲队列接口
-    SLEngineItf engineEngine = nullptr;
     result = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &engineEngine);
     if (SL_RESULT_SUCCESS != result) {
         LOGI("获取引擎接口失败");
@@ -198,7 +175,6 @@ void AudioChannel::audio_play() {
     // SLuint32 numInterfaces: 这是一个无符号整数，表示要在混音器对象上实现的接口数量。
     // const SLInterfaceID *pInterfaceIds:这是一个指向接口ID数组的指针，表示要在混音器对象上实现的接口。
     // const SLboolean *pInterfaceRequired:这是一个指向布尔值数组的指针，表示每个接口是否是必需的。
-    SLObjectItf outputMixObject = nullptr;
     result = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 0, nullptr, nullptr);
     if (SL_RESULT_SUCCESS != result) {
         LOGI("创建混音器失败");
@@ -225,9 +201,10 @@ void AudioChannel::audio_play() {
         // SL_I3DL2_ENVIRONMENT_PRESET_FOREST 表示森林
         // SL_I3DL2_ENVIRONMENT_PRESET_CITY 表示城市
         LOGI("设置混响效果");
-        SLEnvironmentalReverbSettings settings = SL_I3DL2_ENVIRONMENT_PRESET_FOREST;
-        (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
-                outputMixEnvironmentalReverb, &settings);
+        // 暂时不用
+//        SLEnvironmentalReverbSettings settings = SL_I3DL2_ENVIRONMENT_PRESET_FOREST;
+//        (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
+//                outputMixEnvironmentalReverb, &settings);
     }
     // 3. 创建播放器
     // 在OpenSL ES中，SLDataLocator_后缀的类型主要用于描述音频数据的来源或目的地。
@@ -294,7 +271,6 @@ void AudioChannel::audio_play() {
     const SLboolean req[1] = {SL_BOOLEAN_TRUE};
     // 3.6 创建播放器
     // 创建播放器对象：SLObjectItf playerObject
-    SLObjectItf playerObject = nullptr;
     // 最后三个参数用于打开队列的工作。
     result = (*engineEngine)->CreateAudioPlayer(engineEngine, &playerObject, &slDataSource,
                                                 &audioSink, 1, ids, req);
@@ -315,7 +291,7 @@ void AudioChannel::audio_play() {
 
     // 3.8 获取播放器接口
     // SL_IID_PLAY 表示获取播放接口
-    SLPlayItf playerPlay = nullptr;
+
     result = (*playerObject)->GetInterface(playerObject, SL_IID_PLAY, &playerPlay);
     if (SL_RESULT_SUCCESS != result) {
         LOGI("获取播放器接口失败");
@@ -325,7 +301,7 @@ void AudioChannel::audio_play() {
 
     // 3.9 获取缓冲队列接口
     // SL_IID_BUFFERQUEUE 表示获取缓冲队列接口
-    SLBufferQueueItf playerBufferQueue = nullptr;
+
     result = (*playerObject)->GetInterface(playerObject, SL_IID_BUFFERQUEUE, &playerBufferQueue);
     if (SL_RESULT_SUCCESS != result) {
         LOGI("获取缓冲队列接口失败");
@@ -356,4 +332,56 @@ void AudioChannel::audio_play() {
 
     // 3.12 播放 激活回调函数 (回调函数是在子线程中执行的)
     audioBufferCallback(playerBufferQueue, this);
+}
+
+int AudioChannel::get_pcm_size() {
+    // 需要计算的重采样之后的数据大小。之所以有actual，是因为需要提前开辟空间，有个临时的size。（不够准确）
+    int out_buffer_size_actual = 0;
+    int ret = 0;
+    AVFrame *frame = nullptr;
+    while (isPlaying) {
+        // 1. 从队列中取出一个AVFrame
+        ret = frames.pop(frame);
+        if (!isPlaying) {
+            break;
+        }
+        if (!ret) {
+            freeFrame(&frame);
+            continue;
+        }
+
+        // 2.6 重采样
+
+        // 输入视频的采样率（测试视频的是48000hz,2声道,16bit仅供参考）
+        int in_sample_rate = frame->sample_rate;
+        // 计算转换后的sample个数 a * b / c
+        // 要注意这个nb_samples的含义，它就是指每次回调之后，这一个数据包所持续时间内的采样数，也就是一帧的时间x采样率。
+        // 但是这个输入采样数是系统给的，千万不能自己算，这里打印输出是1024，大体上是0.021s，也就是48000x0.021（大约）
+        int in_nb_samples = frame->nb_samples;
+        // 这里通过av_rescale_rnd计算输出样本数，也是指相同时间内输出的样本个数，用来保证不同频率下时间一致，因为不同频率采集的样本量是不同的。
+        // 但也要明白这里只是理论上，实际上会有一定出入，所以这里并不是最终答案。
+        // av_rescale_rnd 这个本身是ffmpeg方舟数据溢出的算法，本质等于 axb/c 也就是 1024 * 44100 / 48000 = 941（向上取整）跟打印输出一致。
+        int out_nb_samples = av_rescale_rnd(
+                swr_get_delay(swrContext, in_sample_rate) + in_nb_samples,
+                out_sample_rate, in_sample_rate, AV_ROUND_UP);
+        // 2.6.2 重采样 这里是真正执行，也就是把重采样的数据放到out_buffer当中，而返回值就是真正意义上的重采样后的输出样本数。
+        int out_convert_samples = swr_convert(swrContext, &out_buffer, out_nb_samples, frame->data,
+                                              in_nb_samples);
+        if (out_convert_samples < 0) {
+            freeFrame(&frame);
+            continue;
+        }
+        // 3. 播放
+        // 为什么传递自己进去，因为不是C++没有this指针
+        // const void *pBuffer : 这是一个指向缓冲区的指针，表示要播放的音频数据。这里是PCM数据。
+        // SLuint32 out_buffer_size_actual : 这是一个无符号整数，表示要播放的音频数据的大小。这里是PCM数据的大小。
+        // 实际数值就是：实际样本数x位数x通道数
+        out_buffer_size_actual = static_cast<SLuint32>(out_convert_samples * out_channels *
+                                                       out_samplesize);
+        freeFrame(&frame);
+        break;
+    }
+    // 输出数据，输出数据大小，就是这么得到的。
+    freeFrame(&frame);
+    return out_buffer_size_actual;
 }

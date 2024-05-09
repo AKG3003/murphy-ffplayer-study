@@ -16,6 +16,9 @@ private:
     pthread_t pid_video_decode;
     pthread_t pid_video_play;
     RenderFrame renderFrame = nullptr;
+    SwsContext *swsContext = nullptr;
+    uint8_t *rgb_dst[4];
+    int rgb_dstStride[4];
 
 public:
     VideoChannel(int i, AVCodecContext *cContext);

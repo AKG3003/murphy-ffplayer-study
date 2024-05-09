@@ -6,10 +6,12 @@
 #define NDK22_COMPILE_STUDY_BASECHANNEL_H
 
 #include "SafeQueue.h"
+#include "ThreadUtil.h"
 
 extern "C" {
-#include "libavformat/avformat.h"
-#include "libavcodec/avcodec.h"
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/time.h>
 }
 
 class BaseChannel {
@@ -33,6 +35,22 @@ public:
     virtual ~BaseChannel() {
         packets.clear();
         frames.clear();
+    }
+
+    void freePacket(AVPacket **packet) {
+        if (packet) {
+            av_packet_unref(*packet);
+            av_packet_free(packet);
+            *packet = nullptr;
+        }
+    }
+
+    void freeFrame(AVFrame **frame) {
+        if (frame) {
+            av_frame_unref(*frame);
+            av_frame_free(frame);
+            *frame = nullptr;
+        }
     }
 
 private:

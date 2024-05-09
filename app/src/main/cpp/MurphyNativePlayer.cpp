@@ -106,7 +106,7 @@ void MurphyNativePlayer::prepare_() {
         if (type == AVMEDIA_TYPE_VIDEO) {
             // 视频流
             video_channel = new VideoChannel(i, codecContext);
-            if (renderFrame && video_channel) {
+            if (renderFrame) {
                 video_channel->setRenderFrame(renderFrame);
             }
         } else {
@@ -135,21 +135,33 @@ void *start_thread_func(void *arg) {
 
 void MurphyNativePlayer::start_() {
     while (isPlaying) {
+        // 初步优化方案-如果队列已经满了，就休眠一下
+        if (video_channel && video_channel->packets.size() > MAX_PACKET_SIZE) {
+            av_usleep(SLEEP_TIME);
+            continue;
+        }
+        if (audio_channel && audio_channel->packets.size() > MAX_PACKET_SIZE) {
+            av_usleep(SLEEP_TIME);
+            continue;
+        }
         AVPacket *packet = av_packet_alloc();
         int ret = av_read_frame(pFormatCtx, packet);
         if (ret == 0) {
             // 将数据包发送给对应的流
             if (video_channel && video_channel->stream_index == packet->stream_index) {
+                // !!!作为生产者，一直在生产数据，可能会撑爆内存。
                 video_channel->packets.push(packet);
             } else if (audio_channel && audio_channel->stream_index == packet->stream_index) {
                 audio_channel->packets.push(packet);
             }
         } else if (ret == AVERROR_EOF) {
             // TODO 读取完毕
-//            if (video_channel->packets.empty() && video_channel->frames.empty() &&
-//                    audio_channel->packets.empty() && audio_channel->frames.empty()) {
-//                break;
-//            }
+            if (video_channel != nullptr && audio_channel != nullptr){
+                if (video_channel->packets.empty() &&video_channel->frames.empty() &&
+                    audio_channel->packets.empty() && audio_channel->frames.empty()) {
+                    break;
+                }
+            }
         } else {
             break; // 出错
         }

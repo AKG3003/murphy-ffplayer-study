@@ -14,6 +14,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/time.h>
 }
 
 typedef void (*RenderFrame)(uint8_t *, int, int, int);
