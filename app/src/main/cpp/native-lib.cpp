@@ -118,6 +118,14 @@ do_get_duration(JNIEnv *env, jobject /* this */){
     return 0;
 }
 
+extern "C"
+JNIEXPORT void JNICALL
+do_seek_to(JNIEnv *env, jobject /* this */, jint progress){
+    if (player){
+        player->seekTo(progress);
+    }
+}
+
 static const JNINativeMethod gMethods[] = {
         {"prepareNative", "(Ljava/lang/String;)V", (void *) do_prepare},
         {"startNative", "()V", (void *) do_start},
@@ -126,6 +134,7 @@ static const JNINativeMethod gMethods[] = {
         {"completeNative", "()V", (void *) do_complete},
         {"setSurfaceNative", "(Landroid/view/Surface;)V", (void *) do_surface_setup},
         {"getDurationNative", "()J", (void *) do_get_duration},
+        {"seekToNative", "(I)V", (void *) do_seek_to},
 };
 
 // 通过JNI_OnLoad函数动态注册

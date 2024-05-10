@@ -382,7 +382,7 @@ int AudioChannel::get_pcm_size() {
 
         // 2.7 计算音频时间
         audio_time = frame->best_effort_timestamp * av_q2d(time_base);
-        LOGI("Murphy音频时间 %lf", audio_time);
+//        LOGI("Murphy音频时间 %lf", audio_time);
         pHelper->onProgress(THREAD_CHILD, audio_time);
 
         freeFrame(&frame);

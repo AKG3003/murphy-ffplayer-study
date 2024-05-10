@@ -7,6 +7,7 @@ MurphyNativePlayer::MurphyNativePlayer(const char *data_source, JNICallbackHelpe
     this->data_source = new char[strlen(data_source) + 1];
     strcpy(this->data_source, data_source);
     this->callbackHelper = pHelper;
+    pthread_mutex_init(&seekMutex, nullptr);
 }
 
 MurphyNativePlayer::~MurphyNativePlayer() {
@@ -19,6 +20,7 @@ MurphyNativePlayer::~MurphyNativePlayer() {
         delete callbackHelper;
         callbackHelper = nullptr;
     }
+    pthread_mutex_destroy(&seekMutex);
 }
 
 // 子线程调用
@@ -207,4 +209,48 @@ void MurphyNativePlayer::setRenderFrame(RenderFrame rf) {
 
 jlong MurphyNativePlayer::getDuration() {
     return duration;
+}
+
+void MurphyNativePlayer::seekTo(int progress) {
+
+    if (progress < 0 || progress > duration) {
+        return;
+    }
+    if (!audio_channel&&!video_channel) {
+        return;
+    }
+    if (!pFormatCtx) {
+        return;
+    }
+
+    // 快速多次执行会出现崩溃，需要查找错误。
+    pthread_mutex_lock(&seekMutex);
+    LOGI("seekTo %d", progress * AV_TIME_BASE);
+    int ret= av_seek_frame(pFormatCtx, -1, progress * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_FRAME);
+    if (ret < 0) {
+        LOGI("seekTo error %d", ret);
+        pthread_mutex_unlock(&seekMutex);
+        return;
+    }
+
+    if (audio_channel) {
+        audio_channel->packets.setWork(0);
+        audio_channel->frames.setWork(0);
+        audio_channel->packets.clear();
+        audio_channel->frames.clear();
+//        avcodec_flush_buffers(audio_channel->codecContext);
+        audio_channel->packets.setWork(1);
+        audio_channel->frames.setWork(1);
+    }
+    if (video_channel) {
+        video_channel->packets.setWork(0);
+        video_channel->frames.setWork(0);
+        video_channel->packets.clear();
+        video_channel->frames.clear();
+//        avcodec_flush_buffers(video_channel->codecContext);
+        video_channel->packets.setWork(1);
+        video_channel->frames.setWork(1);
+    }
+
+    pthread_mutex_unlock(&seekMutex);
 }

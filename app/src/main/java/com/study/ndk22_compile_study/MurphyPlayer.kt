@@ -91,6 +91,8 @@ class MurphyPlayer : SurfaceHolder.Callback {
 
     private external fun getDurationNative(): Long
 
+    private external fun seekToNative(i: Int)
+
     companion object {
         // Used to load the 'ndk22_compile_study' library on application startup.
         init {
@@ -112,5 +114,9 @@ class MurphyPlayer : SurfaceHolder.Callback {
         surfaceHolder?.removeCallback(this)
         surfaceHolder = surfaceView.holder
         surfaceHolder?.addCallback(this)
+    }
+
+    fun seekTo(i: Int) {
+        seekToNative(i)
     }
 }

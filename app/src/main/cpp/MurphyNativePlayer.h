@@ -39,6 +39,8 @@ private:
 
     long duration = 0;
 
+    pthread_mutex_t seekMutex;
+
 public:
     MurphyNativePlayer(const char *data_source, JNICallbackHelper *pHelper);
 
@@ -55,6 +57,8 @@ public:
     void setRenderFrame(RenderFrame rf);
 
     jlong getDuration();
+
+    void seekTo(jint i);
 };
 
 #endif //NDK22_COMPILE_STUDY_MURPHYNATIVEPLAYER_H

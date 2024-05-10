@@ -96,7 +96,9 @@ class MainActivity : AppCompatActivity() {
         seekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    //                        player.seek(progress)
+                    val currentTimeStr = convertDurationToMinSec(progress.toLong())
+                    tvTime?.text = "$currentTimeStr/$durationStr"
+//                    Log.i("Murphy", "onProgressChanged: $progress")
                 }
             }
 
@@ -106,6 +108,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 isTouch = false
+
+                player.seekTo(seekBar?.progress ?: 0)
             }
         })
 
@@ -118,7 +122,6 @@ class MainActivity : AppCompatActivity() {
             }
             player.setProgressListener(object : PlayerProgressListener {
                 override fun onProgress(progress: Int) {
-                    Log.i("Murphy", "onProgress: $progress")
                     if (!isTouch) {
                         runOnUiThread {
                             seekBar?.progress = progress
