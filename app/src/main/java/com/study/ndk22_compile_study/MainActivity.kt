@@ -8,9 +8,13 @@ import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.view.SurfaceView
+import android.view.View
+import android.widget.SeekBar
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.study.ndk22_compile_study.databinding.ActivityMainBinding
 import com.study.ndk22_compile_study.player.PlayerErrorListener
+import com.study.ndk22_compile_study.player.PlayerProgressListener
 import com.study.ndk22_compile_study.player.PlayerStateListener
 
 class MainActivity : AppCompatActivity() {
@@ -23,9 +27,27 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var surfaceView: SurfaceView
 
+    private var seekBar: SeekBar? = null
+    private var tvTime: TextView? = null
+    private var isTouch: Boolean = false
+    private var durationStr: String = "00:00"
+
     private var playerStateListener = object : PlayerStateListener {
         override fun onPrepared() {
             changeShowText("onPrepared")
+            runOnUiThread{
+                val duration = player.getDuration()
+                Log.i("Murphy", "onPrepared: duration=$duration")
+                if (duration != 0L) {
+                    durationStr = convertDurationToMinSec(duration)
+                    tvTime?.text = "00:00/" + durationStr
+                    tvTime?.visibility = View.VISIBLE
+
+                    seekBar?.max = duration.toInt()
+                    seekBar?.progress = 0
+                    seekBar?.visibility = View.VISIBLE
+                }
+            }
             player.start()
         }
 
@@ -68,6 +90,25 @@ class MainActivity : AppCompatActivity() {
 
         surfaceView = binding.surfaceView
 
+        seekBar = binding.seekBar
+        tvTime = binding.tvTime
+
+        seekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    //                        player.seek(progress)
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isTouch = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                isTouch = false
+            }
+        })
+
         player.let { player ->
             getExternalStorageDemoMp4Path().let { path ->
                 player.setDataSource(path)
@@ -75,6 +116,18 @@ class MainActivity : AppCompatActivity() {
                 player.setStateListener(playerStateListener)
                 player.setErrorListener(playerErrorListener)
             }
+            player.setProgressListener(object : PlayerProgressListener {
+                override fun onProgress(progress: Int) {
+                    Log.i("Murphy", "onProgress: $progress")
+                    if (!isTouch) {
+                        runOnUiThread {
+                            seekBar?.progress = progress
+                            val currentTimeStr = convertDurationToMinSec(progress.toLong())
+                            tvTime?.text = "$currentTimeStr/$durationStr"
+                        }
+                    }
+                }
+            })
         }
     }
 
@@ -86,7 +139,13 @@ class MainActivity : AppCompatActivity() {
                 it.text = text
             }
         }
+    }
 
+    private fun convertDurationToMinSec(duration: Long): String {
+        val totalSeconds = duration
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format("%02d:%02d", minutes, seconds)
     }
 
     override fun onResume() {

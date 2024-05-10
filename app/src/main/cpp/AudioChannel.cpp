@@ -134,9 +134,6 @@ void AudioChannel::audio_decode() {
         }
         // 音频是压缩的，需要解码成PCM格式
         frames.push(frame);
-
-        // 2.7 计算音频时间
-        audio_time = frame->best_effort_timestamp * av_q2d(time_base);
     }
     freePacket(&packet);
 }
@@ -381,10 +378,21 @@ int AudioChannel::get_pcm_size() {
         // 实际数值就是：实际样本数x位数x通道数
         out_buffer_size_actual = static_cast<SLuint32>(out_convert_samples * out_channels *
                                                        out_samplesize);
+
+
+        // 2.7 计算音频时间
+        audio_time = frame->best_effort_timestamp * av_q2d(time_base);
+        LOGI("Murphy音频时间 %lf", audio_time);
+        pHelper->onProgress(THREAD_CHILD, audio_time);
+
         freeFrame(&frame);
         break;
     }
     // 输出数据，输出数据大小，就是这么得到的。
     freeFrame(&frame);
     return out_buffer_size_actual;
+}
+
+void AudioChannel::setJNICallbackHelper(JNICallbackHelper *helper) {
+    this->pHelper = helper;
 }

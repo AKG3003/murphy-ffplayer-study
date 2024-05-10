@@ -5,6 +5,7 @@
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 #include "LogUtil.h"
+#include "JNICallbackHelper.h"
 
 extern "C" {
 #include <libswresample/swresample.h>
@@ -22,6 +23,7 @@ private:
     SLObjectItf playerObject = nullptr;
     SLPlayItf playerPlay = nullptr;
     SLBufferQueueItf playerBufferQueue = nullptr;
+    JNICallbackHelper *pHelper = nullptr;
 
 
 public:
@@ -38,6 +40,8 @@ public:
     void audio_play();
 
     int get_pcm_size();
+
+    void setJNICallbackHelper(JNICallbackHelper *pHelper);
 
     SwrContext *swrContext = nullptr;
     uint8_t *out_buffer = nullptr;

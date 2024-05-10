@@ -44,6 +44,7 @@ void MurphyNativePlayer::prepare_() {
         }
         return;
     }
+    // pFormatCtx->duration;// mp4可以拿到但是flv拿不到
     // 查找流信息
     ret = avformat_find_stream_info(pFormatCtx, nullptr);
     if (ret != 0) {
@@ -54,6 +55,8 @@ void MurphyNativePlayer::prepare_() {
         return;
     }
 
+    this->duration = pFormatCtx->duration / AV_TIME_BASE;// 转换成秒。
+    LOGI("Murphy视频时长：%ld", this->duration);
     LOGI("流的数量：%d", pFormatCtx->nb_streams);
     for (i = 0; i < pFormatCtx->nb_streams; ++i) {
         // 获取流
@@ -112,13 +115,14 @@ void MurphyNativePlayer::prepare_() {
         if (type == AVMEDIA_TYPE_VIDEO) {
             // 视频流
             int fps = av_q2d(stream->avg_frame_rate);
-            video_channel = new VideoChannel(i, codecContext, time_base,fps);
+            video_channel = new VideoChannel(i, codecContext, time_base, fps);
             if (renderFrame) {
                 video_channel->setRenderFrame(renderFrame);
             }
         } else {
             // 音频流
             audio_channel = new AudioChannel(i, codecContext, time_base);
+            audio_channel->setJNICallbackHelper(callbackHelper);
         }
     }
     // 健壮性校验
@@ -199,4 +203,8 @@ void MurphyNativePlayer::start() {
 
 void MurphyNativePlayer::setRenderFrame(RenderFrame rf) {
     renderFrame = rf;
+}
+
+jlong MurphyNativePlayer::getDuration() {
+    return duration;
 }

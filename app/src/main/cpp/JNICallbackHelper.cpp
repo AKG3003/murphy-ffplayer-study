@@ -16,7 +16,7 @@ JNICallbackHelper::JNICallbackHelper(JavaVM *pVm, JNIEnv *pEnv, jobject obj) {
 //    jmd_stopped = pEnv->GetMethodID(callbackClazz, "stoppedNative", "()V");
 //    jmd_completed = pEnv->GetMethodID(callbackClazz, "completedNative", "()V");
     jmd_error = pEnv->GetMethodID(clazz, "onError", "(I)V");
-//    jmd_progress = pEnv->GetMethodID(clazz, "onProgress", "(I)V");
+    jmd_progress = pEnv->GetMethodID(clazz, "onProgress", "(I)V");
 
 }
 
@@ -48,6 +48,20 @@ void JNICallbackHelper::onError(int thread_mode, int error_code) {
         JNIEnv *env_child;
         pVm->AttachCurrentThread(&env_child, 0);
         env_child->CallVoidMethod(obj, jmd_error, error_code);
+        pVm->DetachCurrentThread();
+    }
+}
+
+void JNICALL JNICallbackHelper::onProgress(int thread_mode, int progress) {
+    if (thread_mode == THREAD_MAIN) {
+        //主线程
+        pEnv->CallVoidMethod(obj, jmd_progress, progress);
+    } else {
+        //子线程
+        //当前子线程的 JNIEnv
+        JNIEnv *env_child;
+        pVm->AttachCurrentThread(&env_child, 0);
+        env_child->CallVoidMethod(obj, jmd_progress, progress);
         pVm->DetachCurrentThread();
     }
 }

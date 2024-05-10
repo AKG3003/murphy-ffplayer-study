@@ -18,6 +18,7 @@ private:
     jmethodID jmd_completed;
 
     jmethodID jmd_error;
+    jmethodID jmd_progress;
 
 public:
     JNICallbackHelper(JavaVM *pVm, JNIEnv *pEnv, jobject obj);
@@ -27,6 +28,8 @@ public:
     void onPrepared(int thread_mode);
 
     void onError(int thread_mode, int error_code);
+
+    void onProgress(int thread_mode, int progress);
 
 };
 

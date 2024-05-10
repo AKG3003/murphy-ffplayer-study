@@ -109,6 +109,15 @@ do_surface_setup(JNIEnv *env, jobject /* this */, jobject surface) {
     pthread_mutex_unlock(&mutex);
 }
 
+extern "C"
+JNIEXPORT jlong JNICALL
+do_get_duration(JNIEnv *env, jobject /* this */){
+    if (player){
+        return player->getDuration();
+    }
+    return 0;
+}
+
 static const JNINativeMethod gMethods[] = {
         {"prepareNative", "(Ljava/lang/String;)V", (void *) do_prepare},
         {"startNative", "()V", (void *) do_start},
@@ -116,6 +125,7 @@ static const JNINativeMethod gMethods[] = {
         {"stopNative", "()V", (void *) do_stop},
         {"completeNative", "()V", (void *) do_complete},
         {"setSurfaceNative", "(Landroid/view/Surface;)V", (void *) do_surface_setup},
+        {"getDurationNative", "()J", (void *) do_get_duration},
 };
 
 // 通过JNI_OnLoad函数动态注册

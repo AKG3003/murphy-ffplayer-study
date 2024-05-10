@@ -28,6 +28,7 @@ public:
     BaseChannel(int i, AVCodecContext *cContext, AVRational timeBase) {
         stream_index = i;
         this->codecContext = cContext;
+        this->time_base = timeBase;
 //        this->fContext = pfContext;
         packets.setReleaseCallback(releaseAVPacket);
         frames.setReleaseCallback(releaseAVFrame);

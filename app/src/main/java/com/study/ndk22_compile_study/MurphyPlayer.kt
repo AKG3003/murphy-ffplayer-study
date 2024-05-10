@@ -71,6 +71,14 @@ class MurphyPlayer : SurfaceHolder.Callback {
         }
     }
 
+    fun onProgress(progress: Int) {
+        progressListener?.onProgress(progress)
+    }
+
+    fun getDuration(): Long {
+        return getDurationNative()
+    }
+
     //native methods
 
     private external fun prepareNative(dataSource: String)
@@ -81,6 +89,7 @@ class MurphyPlayer : SurfaceHolder.Callback {
 
     private external fun setSurfaceNative(surface: Surface)
 
+    private external fun getDurationNative(): Long
 
     companion object {
         // Used to load the 'ndk22_compile_study' library on application startup.

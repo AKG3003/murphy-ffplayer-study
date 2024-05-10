@@ -37,6 +37,8 @@ private:
 
     RenderFrame renderFrame = nullptr;
 
+    long duration = 0;
+
 public:
     MurphyNativePlayer(const char *data_source, JNICallbackHelper *pHelper);
 
@@ -51,6 +53,8 @@ public:
     void start_();
 
     void setRenderFrame(RenderFrame rf);
+
+    jlong getDuration();
 };
 
 #endif //NDK22_COMPILE_STUDY_MURPHYNATIVEPLAYER_H
