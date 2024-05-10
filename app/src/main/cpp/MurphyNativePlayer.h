@@ -28,6 +28,7 @@ private:
 
     pthread_t pid_prepare;
     pthread_t pid_start;
+    pthread_t pid_stop;
 
     AVFormatContext *pFormatCtx = nullptr;
     JNICallbackHelper *callbackHelper = nullptr;
@@ -59,6 +60,10 @@ public:
     jlong getDuration();
 
     void seekTo(jint i);
+
+    void stop();
+
+    void stop_();
 };
 
 #endif //NDK22_COMPILE_STUDY_MURPHYNATIVEPLAYER_H

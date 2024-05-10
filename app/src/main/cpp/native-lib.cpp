@@ -77,13 +77,33 @@ do_start(JNIEnv *env, jobject /* this */) {
 extern "C"
 JNIEXPORT void JNICALL
 do_stop(JNIEnv *env, jobject /* this */) {
-
+    if (player) {
+        player->stop();
+    }
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 do_complete(JNIEnv *env, jobject /* this */) {
+    pthread_mutex_lock(&mutex);
+    if (window) {
+        ANativeWindow_release(window);
+        window = nullptr;
+    }
+    pthread_mutex_unlock(&mutex);
 
+    if (player){
+//        player->stop();
+        delete player;
+        player = nullptr;
+    }
+    if (helper){
+        delete helper;
+        helper = nullptr;
+    }
+    if (g_javaVM){
+        g_javaVM = nullptr;
+    }
 }
 
 extern "C"

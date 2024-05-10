@@ -44,6 +44,7 @@ void MurphyNativePlayer::prepare_() {
             callbackHelper->onError(THREAD_CHILD, FFMPEG_CAN_NOT_OPEN_URL);
             // char * errorInfo = av_err2str(r); // 根据你的返回值 得到错误详情
         }
+        avformat_close_input(&pFormatCtx);
         return;
     }
     // pFormatCtx->duration;// mp4可以拿到但是flv拿不到
@@ -54,6 +55,7 @@ void MurphyNativePlayer::prepare_() {
         if (callbackHelper) {
             callbackHelper->onError(THREAD_CHILD, FFMPEG_CAN_NOT_FIND_STREAMS);
         }
+        avformat_close_input(&pFormatCtx);
         return;
     }
 
@@ -85,6 +87,7 @@ void MurphyNativePlayer::prepare_() {
             if (callbackHelper) {
                 callbackHelper->onError(THREAD_CHILD, FFMPEG_FIND_DECODER_FAIL);
             }
+            avformat_close_input(&pFormatCtx);
             return;
         }
         // 分配解码器上下文，版本3，但是这里缺乏参数
@@ -94,6 +97,9 @@ void MurphyNativePlayer::prepare_() {
             if (callbackHelper) {
                 callbackHelper->onError(THREAD_CHILD, FFMPEG_ALLOC_CODEC_CONTEXT_FAIL);
             }
+            // 释放解码器CodecContext Codec会自动释放。
+            avcodec_free_context(&codecContext);
+            avformat_close_input(&pFormatCtx);
             return;
         }
         // 将流参数拷贝到解码器上下文
@@ -102,6 +108,8 @@ void MurphyNativePlayer::prepare_() {
             if (callbackHelper) {
                 callbackHelper->onError(THREAD_CHILD, FFMPEG_CODEC_CONTEXT_PARAMETERS_FAIL);
             }
+            avcodec_free_context(&codecContext);
+            avformat_close_input(&pFormatCtx);
             return;
         }
         // 打开解码器
@@ -110,6 +118,8 @@ void MurphyNativePlayer::prepare_() {
             if (callbackHelper) {
                 callbackHelper->onError(THREAD_CHILD, FFMPEG_OPEN_DECODER_FAIL);
             }
+            avcodec_free_context(&codecContext);
+            avformat_close_input(&pFormatCtx);
             return;
         }
         AVRational time_base = stream->time_base;
@@ -216,7 +226,7 @@ void MurphyNativePlayer::seekTo(int progress) {
     if (progress < 0 || progress > duration) {
         return;
     }
-    if (!audio_channel&&!video_channel) {
+    if (!audio_channel && !video_channel) {
         return;
     }
     if (!pFormatCtx) {
@@ -226,7 +236,8 @@ void MurphyNativePlayer::seekTo(int progress) {
     // 快速多次执行会出现崩溃，需要查找错误。
     pthread_mutex_lock(&seekMutex);
     LOGI("seekTo %d", progress * AV_TIME_BASE);
-    int ret= av_seek_frame(pFormatCtx, -1, progress * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_FRAME);
+    int ret = av_seek_frame(pFormatCtx, -1, progress * AV_TIME_BASE,
+                            AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_FRAME);
     if (ret < 0) {
         LOGI("seekTo error %d", ret);
         pthread_mutex_unlock(&seekMutex);
@@ -253,4 +264,46 @@ void MurphyNativePlayer::seekTo(int progress) {
     }
 
     pthread_mutex_unlock(&seekMutex);
+}
+
+void *stop_thread_func(void *arg) {
+    MurphyNativePlayer *player = static_cast<MurphyNativePlayer *>(arg);
+    player->stop_();
+    return nullptr;
+}
+
+void MurphyNativePlayer::stop() {
+
+    callbackHelper = nullptr;
+
+    if (audio_channel) {
+        audio_channel->stop();
+    }
+    if (video_channel) {
+        video_channel->stop();
+    }
+
+    pthread_create(&pid_stop, nullptr, stop_thread_func, this);
+}
+
+void MurphyNativePlayer::stop_() {
+    isPlaying = false;
+
+    pthread_join(pid_prepare, nullptr);
+    pthread_join(pid_start, nullptr);
+
+    if (pFormatCtx) {
+        avformat_close_input(&pFormatCtx);
+        avformat_free_context(pFormatCtx);
+        pFormatCtx = nullptr;
+    }
+    if (audio_channel) {
+        delete audio_channel;
+        audio_channel = nullptr;
+    }
+    if (video_channel) {
+        delete video_channel;
+        video_channel = nullptr;
+    }
+    delete this;
 }

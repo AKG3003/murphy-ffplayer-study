@@ -51,11 +51,43 @@ AudioChannel::AudioChannel(int i, AVCodecContext *cContext, AVRational timeBase)
 }
 
 AudioChannel::~AudioChannel() {
-
+    if (swrContext) {
+        swr_free(&swrContext);
+        swrContext = nullptr;
+    }
+    if (out_buffer) {
+        av_free(out_buffer);
+        out_buffer = nullptr;
+    }
 }
 
 void AudioChannel::stop() {
-
+    isPlaying = false;
+    pHelper = nullptr;
+    packets.setWork(0);
+    frames.setWork(0);
+    pthread_join(pid_audio_decode, nullptr);
+    pthread_join(pid_audio_play, nullptr);
+    if (engineObject) {
+        (*engineObject)->Destroy(engineObject);
+        engineObject = nullptr;
+        engineEngine = nullptr;
+        playerBufferQueue = nullptr;
+    }
+    if (outputMixObject) {
+        (*outputMixObject)->Destroy(outputMixObject);
+        outputMixObject = nullptr;
+    }
+    if (playerObject) {
+        (*playerObject)->Destroy(playerObject);
+        playerObject = nullptr;
+    }
+    if (playerPlay) {
+        (*playerPlay)->SetPlayState(playerPlay, SL_PLAYSTATE_STOPPED);
+        playerPlay = nullptr;
+    }
+    packets.clear();
+    frames.clear();
 }
 
 void *task_audio_decode(void *args) {

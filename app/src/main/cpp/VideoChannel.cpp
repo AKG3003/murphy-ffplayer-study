@@ -43,11 +43,29 @@ VideoChannel::VideoChannel(int i, AVCodecContext *cContext, AVRational timeBase,
 }
 
 VideoChannel::~VideoChannel() {
-    sws_freeContext(swsContext);
+    if (swsContext) {
+        sws_freeContext(swsContext);
+        swsContext = nullptr;
+    }
 }
 
 void VideoChannel::stop() {
-
+    isPlaying = false;
+    audio_channel = nullptr;
+    packets.setWork(0);
+    frames.setWork(0);
+    pthread_join(pid_video_decode, nullptr);
+    pthread_join(pid_video_play, nullptr);
+    if (codecContext) {
+        avcodec_close(codecContext);
+        avcodec_free_context(&codecContext);
+        codecContext = nullptr;
+    }
+    if (rgb_dst[0]) {
+        av_freep(&rgb_dst[0]);
+    }
+    packets.clear();
+    frames.clear();
 }
 
 void *task_video_decode(void *args) {

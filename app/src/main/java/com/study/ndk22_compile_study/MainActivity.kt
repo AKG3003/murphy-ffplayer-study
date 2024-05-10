@@ -158,10 +158,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        player.stop()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        player.release()
     }
 
     private fun getExternalStorageDemoMp4Path(): String {

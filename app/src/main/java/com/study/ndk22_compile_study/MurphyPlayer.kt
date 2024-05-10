@@ -119,4 +119,12 @@ class MurphyPlayer : SurfaceHolder.Callback {
     fun seekTo(i: Int) {
         seekToNative(i)
     }
+
+    fun stop() {
+        stopNative()
+    }
+
+    fun release() {
+        completeNative()
+    }
 }
