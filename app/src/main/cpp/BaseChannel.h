@@ -23,8 +23,9 @@ public:
     bool isPlaying = false;//是否正在播放
     SafeQueue<AVPacket *> packets;//队列中存放的是压缩数据包（视频或音频）
     SafeQueue<AVFrame *> frames;//队列中存放的是解码后的数据包（视频或音频）
+    AVRational time_base;//流的时间基
 
-    BaseChannel(int i, AVCodecContext *cContext) {
+    BaseChannel(int i, AVCodecContext *cContext, AVRational timeBase) {
         stream_index = i;
         this->codecContext = cContext;
 //        this->fContext = pfContext;
@@ -53,7 +54,6 @@ public:
         }
     }
 
-private:
     static void releaseAVPacket(AVPacket **packet) {
         if (packet) {
             av_packet_free(packet);

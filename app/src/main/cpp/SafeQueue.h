@@ -13,6 +13,7 @@ template<typename T>
 class SafeQueue {
 private:
     typedef void (*ReleaseCallback)(T *);//函数指针 释放队列中元素的回调函数
+    typedef void (*SyncHandle)(queue<T> &);//函数指针 同步处理队列中元素的回调函数4
 
     queue<T> queue;
     // 互斥锁
@@ -25,6 +26,7 @@ private:
     pthread_cond_t cond_ctrl_num;
     int work;
     ReleaseCallback releaseCallback;
+    SyncHandle syncHandle;
 
 
 public:
@@ -130,6 +132,17 @@ public:
 
     void setReleaseCallback(ReleaseCallback callback) {
         this->releaseCallback = callback;
+    }
+
+
+    void setSyncHandle(SyncHandle handle) {
+        this->syncHandle = handle;
+    }
+
+    void sync() {
+        pthread_mutex_lock(&mutex);
+        syncHandle(queue);
+        pthread_mutex_unlock(&mutex);
     }
 };
 

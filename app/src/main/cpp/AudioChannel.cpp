@@ -1,7 +1,7 @@
 #include "AudioChannel.h"
 
-AudioChannel::AudioChannel(int i, AVCodecContext *cContext)
-        : BaseChannel(i, cContext) {
+AudioChannel::AudioChannel(int i, AVCodecContext *cContext, AVRational timeBase)
+        : BaseChannel(i, cContext, timeBase) {
 
 
     // 2. 重采样 音频三要素：声道数、采样位数、采样率
@@ -134,6 +134,9 @@ void AudioChannel::audio_decode() {
         }
         // 音频是压缩的，需要解码成PCM格式
         frames.push(frame);
+
+        // 2.7 计算音频时间
+        audio_time = frame->best_effort_timestamp * av_q2d(time_base);
     }
     freePacket(&packet);
 }

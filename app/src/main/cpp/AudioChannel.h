@@ -25,7 +25,7 @@ private:
 
 
 public:
-    AudioChannel(int i, AVCodecContext *cContext);
+    AudioChannel(int i, AVCodecContext *cContext, AVRational timeBase);
 
     virtual ~AudioChannel();
 
@@ -46,6 +46,7 @@ public:
     int out_samplesize = 0;
 
     int out_buffer_size_pre = 0;
+    double audio_time = 0;
 
 };
 

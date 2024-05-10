@@ -2,6 +2,7 @@
 #define NDK22_COMPILE_STUDY_VIDEOCHANNEL_H
 
 #include "BaseChannel.h"
+#include "AudioChannel.h"
 
 extern "C" {
 #include <libswscale/swscale.h>
@@ -20,8 +21,11 @@ private:
     uint8_t *rgb_dst[4];
     int rgb_dstStride[4];
 
+    int fps;
+    AudioChannel* audio_channel = nullptr;
+
 public:
-    VideoChannel(int i, AVCodecContext *cContext);
+    VideoChannel(int i, AVCodecContext *cContext, AVRational timeBase, int _fps);
 
     virtual ~VideoChannel();
 
@@ -35,7 +39,9 @@ public:
 
     void setRenderFrame(RenderFrame rf);
 
+    void setAudioChannel(AudioChannel *audioChannel);
+
 };
 
 
-#endif //NDK22_COMPILE_STUDY_VIDEOCHANNEL_H
+#endif //NDK22_COMPILE_STUDY_VIDEOCHANNEL_H22211

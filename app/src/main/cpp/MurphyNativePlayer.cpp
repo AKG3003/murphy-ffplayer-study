@@ -62,6 +62,10 @@ void MurphyNativePlayer::prepare_() {
         AVCodecParameters *codecParameters = stream->codecpar;
         // 获取流的编解码类型
         AVMediaType type = codecParameters->codec_type;
+        if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) {
+            // 如果是附图，跳过
+            continue;
+        }
         if (type != AVMEDIA_TYPE_VIDEO && type != AVMEDIA_TYPE_AUDIO) {
             LOGI("不是视频流或音频流，跳过");
             if (callbackHelper) {
@@ -103,15 +107,18 @@ void MurphyNativePlayer::prepare_() {
             }
             return;
         }
+        AVRational time_base = stream->time_base;
+
         if (type == AVMEDIA_TYPE_VIDEO) {
             // 视频流
-            video_channel = new VideoChannel(i, codecContext);
+            int fps = av_q2d(stream->avg_frame_rate);
+            video_channel = new VideoChannel(i, codecContext, time_base,fps);
             if (renderFrame) {
                 video_channel->setRenderFrame(renderFrame);
             }
         } else {
             // 音频流
-            audio_channel = new AudioChannel(i, codecContext);
+            audio_channel = new AudioChannel(i, codecContext, time_base);
         }
     }
     // 健壮性校验
@@ -156,8 +163,8 @@ void MurphyNativePlayer::start_() {
             }
         } else if (ret == AVERROR_EOF) {
             // TODO 读取完毕
-            if (video_channel != nullptr && audio_channel != nullptr){
-                if (video_channel->packets.empty() &&video_channel->frames.empty() &&
+            if (video_channel != nullptr && audio_channel != nullptr) {
+                if (video_channel->packets.empty() && video_channel->frames.empty() &&
                     audio_channel->packets.empty() && audio_channel->frames.empty()) {
                     break;
                 }
@@ -178,12 +185,13 @@ void MurphyNativePlayer::start_() {
 void MurphyNativePlayer::start() {
     isPlaying = true;
 
-    if (video_channel) {
-        video_channel->start();
-    }
-
     if (audio_channel) {
         audio_channel->start();
+    }
+
+    if (video_channel) {
+        video_channel->setAudioChannel(audio_channel);
+        video_channel->start();
     }
 
     pthread_create(&pid_start, nullptr, start_thread_func, this);

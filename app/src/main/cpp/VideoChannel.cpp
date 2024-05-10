@@ -1,18 +1,45 @@
 #include "VideoChannel.h"
 
-VideoChannel::VideoChannel(int i, AVCodecContext *cContext)
-        : BaseChannel(i, cContext) {
+void DropAVPacket(queue<AVPacket *> &queue) {
+    while (!queue.empty()) {
+        AVPacket *packet = queue.front();
+        if (packet->flags != AV_PKT_FLAG_KEY) {
+            queue.pop();
+            av_packet_unref(packet);
+            BaseChannel::releaseAVPacket(&packet);
+        } else {
+            break;
+        }
+    }
+}
+
+void DropAVFrame(queue<AVFrame *> &queue) {
+    if (!queue.empty()) {
+        AVFrame *frame = queue.front();
+        queue.pop();
+        av_frame_free(&frame);
+        BaseChannel::releaseAVFrame(&frame);
+    }
+}
+
+VideoChannel::VideoChannel(int i, AVCodecContext *cContext, AVRational timeBase, int _fps)
+        : BaseChannel(i, cContext, timeBase) {
     // 1.1 创建上下文环境
-     swsContext = sws_getContext(cContext->width,
-                                            cContext->height,
-                                            codecContext->pix_fmt,
-                                            cContext->width,
-                                            cContext->height,
-                                            AV_PIX_FMT_RGBA,
-                                            SWS_BILINEAR,
-                                            nullptr,
-                                            nullptr,
-                                            nullptr);
+    fps = _fps;
+
+    packets.setSyncHandle(DropAVPacket);
+    frames.setSyncHandle(DropAVFrame);
+
+    swsContext = sws_getContext(cContext->width,
+                                cContext->height,
+                                codecContext->pix_fmt,
+                                cContext->width,
+                                cContext->height,
+                                AV_PIX_FMT_RGBA,
+                                SWS_BILINEAR,
+                                nullptr,
+                                nullptr,
+                                nullptr);
 }
 
 VideoChannel::~VideoChannel() {
@@ -126,13 +153,40 @@ void VideoChannel::video_play() {
                   rgb_dst,
                   rgb_dstStride);
         // 2. 绘制一帧画面，需要宽，高，像素格式，数据。这里是RGBA格式的数据。
+
+        // 2.1 计算延迟时间
+        double extra_delay = frame->repeat_pict / (2 * fps);
+        double delay = 1.0 / fps + extra_delay;
+        LOGI("extra_delay: %f, delay: %f", extra_delay, delay);
+        av_usleep(delay * 1000000);
+
         renderFrame(rgb_dst[0], rgb_dstStride[0], frame->width, frame->height);
 
         // 3. 控制播放速度
 
 
         // 4. 控制音视频同步
+        double videoTime = frame->best_effort_timestamp * av_q2d(time_base);
+        double audioTime = audio_channel->audio_time;
+        double time_diff = videoTime - audioTime;
 
+        // 4.1 如果视频比音频快，延迟一点时间
+        if (time_diff > 0) {
+            // 视频比音频快非常多，延迟一段时间，但并不睡眠两个差值。
+            if (time_diff > 1) {
+                av_usleep(delay * 2 * 1000 * 1000);
+            } else {
+                av_usleep((delay + time_diff) * 1000 * 1000);
+            }
+        } else if (time_diff < 0) {
+            // 音频比视频快，要用视频追音频，要让视频快一点，所以丢包。
+            if (time_diff > -0.05) {
+                // 视频比音频快
+                frames.sync();
+                packets.sync();
+                continue;
+            }
+        }
 
         // 5. 释放资源
         freeFrame(&frame);
@@ -144,4 +198,8 @@ void VideoChannel::video_play() {
 
 void VideoChannel::setRenderFrame(RenderFrame rf) {
     this->renderFrame = rf;
+}
+
+void VideoChannel::setAudioChannel(AudioChannel *audioChannel) {
+    this->audio_channel = audioChannel;
 }
