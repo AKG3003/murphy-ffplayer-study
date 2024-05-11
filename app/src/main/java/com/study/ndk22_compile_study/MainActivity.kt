@@ -167,7 +167,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getExternalStorageDemoMp4Path(): String {
-        return Environment.getExternalStorageDirectory().absolutePath + "/Download/demo.mp4"
+        return "rtmp://live.hkstv.hk.lxdns.com/live/hks"
+//        return Environment.getExternalStorageDirectory().absolutePath + "/Download/demo.mp4"
     }
 
     @Deprecated("Deprecated in Java")
