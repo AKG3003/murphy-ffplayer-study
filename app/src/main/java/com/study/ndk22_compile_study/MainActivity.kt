@@ -132,6 +132,8 @@ class MainActivity : AppCompatActivity() {
                 }
             })
         }
+
+        player.showRTMP()
     }
 
     private fun changeShowText(text: String, color: Int = Color.BLACK) {

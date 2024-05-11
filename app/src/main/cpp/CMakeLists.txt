@@ -28,6 +28,14 @@ add_library(${CMAKE_PROJECT_NAME} SHARED ${SOURCES})
 
 #add_subdirectory(${CMAKE_SOURCE_DIR}/libget)
 
+add_subdirectory(librtmp)
+include_directories(librtmp libx264)
+
+#set(X264DIR ${CMAKE_SOURCE_DIR}/../jniLibs/${STUDY_ABI})
+#message(X264DIR: ${X264DIR})
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -L${X264DIR}")
+
+
 #find_library(android-lib android)
 #message(android-lib: ${android-lib})
 #find_library(z-lib z)
@@ -51,4 +59,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         Android
         OpenSLES
         rtmp
+        x264
 )

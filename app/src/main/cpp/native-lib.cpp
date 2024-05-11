@@ -6,6 +6,11 @@
 #include "LogUtil.h"
 #include <android/native_window_jni.h>
 
+extern "C" {
+#include <rtmp.h>
+#include <x264.h>
+}
+
 
 #define NELEM(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -54,7 +59,7 @@ void render_frame(uint8_t *data, int linesize, int w, int h) {
 
 extern "C"
 JNIEXPORT void JNICALL
-do_prepare(JNIEnv *env, jobject thiz /* this */,jstring data_source) {
+do_prepare(JNIEnv *env, jobject thiz /* this */, jstring data_source) {
     const char *dataSource = env->GetStringUTFChars(data_source, nullptr);
 
     helper = new JNICallbackHelper(g_javaVM, env, thiz);
@@ -69,7 +74,7 @@ do_prepare(JNIEnv *env, jobject thiz /* this */,jstring data_source) {
 extern "C"
 JNIEXPORT void JNICALL
 do_start(JNIEnv *env, jobject /* this */) {
-    if (player){
+    if (player) {
         player->start();
     }
 }
@@ -92,16 +97,16 @@ do_complete(JNIEnv *env, jobject /* this */) {
     }
     pthread_mutex_unlock(&mutex);
 
-    if (player){
+    if (player) {
 //        player->stop();
         delete player;
         player = nullptr;
     }
-    if (helper){
+    if (helper) {
         delete helper;
         helper = nullptr;
     }
-    if (g_javaVM){
+    if (g_javaVM) {
         g_javaVM = nullptr;
     }
 }
@@ -131,8 +136,8 @@ do_surface_setup(JNIEnv *env, jobject /* this */, jobject surface) {
 
 extern "C"
 JNIEXPORT jlong JNICALL
-do_get_duration(JNIEnv *env, jobject /* this */){
-    if (player){
+do_get_duration(JNIEnv *env, jobject /* this */) {
+    if (player) {
         return player->getDuration();
     }
     return 0;
@@ -140,21 +145,33 @@ do_get_duration(JNIEnv *env, jobject /* this */){
 
 extern "C"
 JNIEXPORT void JNICALL
-do_seek_to(JNIEnv *env, jobject /* this */, jint progress){
-    if (player){
+do_seek_to(JNIEnv *env, jobject /* this */, jint progress) {
+    if (player) {
         player->seekTo(progress);
     }
 }
 
+extern "C"
+JNIEXPORT void JNICALL
+do_show_rtmp(JNIEnv *env, jobject /* this */) {
+    LOGI("Murphy:RTMP_LibVersion: %d", RTMP_LibVersion());
+    x264_picture_t *picture = new x264_picture_t();
+    if (picture) {
+        LOGI("Murphy:x264_picture_new");
+    }
+}
+
 static const JNINativeMethod gMethods[] = {
-        {"prepareNative", "(Ljava/lang/String;)V", (void *) do_prepare},
-        {"startNative", "()V", (void *) do_start},
-        {"pauseNative", "()V", (void *) do_pause},
-        {"stopNative", "()V", (void *) do_stop},
-        {"completeNative", "()V", (void *) do_complete},
-        {"setSurfaceNative", "(Landroid/view/Surface;)V", (void *) do_surface_setup},
-        {"getDurationNative", "()J", (void *) do_get_duration},
-        {"seekToNative", "(I)V", (void *) do_seek_to},
+        {"prepareNative",     "(Ljava/lang/String;)V",     (void *) do_prepare},
+        {"startNative",       "()V",                       (void *) do_start},
+        {"pauseNative",       "()V",                       (void *) do_pause},
+        {"stopNative",        "()V",                       (void *) do_stop},
+        {"completeNative",    "()V",                       (void *) do_complete},
+        {"setSurfaceNative",  "(Landroid/view/Surface;)V", (void *) do_surface_setup},
+        {"getDurationNative", "()J",                       (void *) do_get_duration},
+        {"seekToNative",      "(I)V",                      (void *) do_seek_to},
+        {"showRTMPNative",    "()V",                       (void *) do_show_rtmp},
+
 };
 
 // 通过JNI_OnLoad函数动态注册

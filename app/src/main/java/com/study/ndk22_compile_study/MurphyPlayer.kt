@@ -127,4 +127,10 @@ class MurphyPlayer : SurfaceHolder.Callback {
     fun release() {
         completeNative()
     }
+
+    fun showRTMP() {
+        showRTMPNative()
+    }
+
+    private external fun showRTMPNative()
 }
