@@ -2,6 +2,7 @@ package com.study.ndk22_compile_study
 
 import android.content.Intent
 import android.graphics.Color
+import android.hardware.Camera
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -16,10 +17,13 @@ import com.study.ndk22_compile_study.databinding.ActivityMainBinding
 import com.study.ndk22_compile_study.player.PlayerErrorListener
 import com.study.ndk22_compile_study.player.PlayerProgressListener
 import com.study.ndk22_compile_study.player.PlayerStateListener
+import com.study.ndk22_compile_study.push.CameraHelper
+import com.study.ndk22_compile_study.push.Pusher
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var pusher: Pusher
 
     private val REQUEST_CODE_PERMISSIONS = 1001
 
@@ -35,7 +39,7 @@ class MainActivity : AppCompatActivity() {
     private var playerStateListener = object : PlayerStateListener {
         override fun onPrepared() {
             changeShowText("onPrepared")
-            runOnUiThread{
+            runOnUiThread {
                 val duration = player.getDuration()
                 Log.i("Murphy", "onPrepared: duration=$duration")
                 if (duration != 0L) {
@@ -134,6 +138,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         player.showRTMP()
+
+        pusher = Pusher(this, Camera.CameraInfo.CAMERA_FACING_BACK, 640, 480, 25, 800 * 1000)
+        pusher.setPreviewDisplay(surfaceView.holder)
     }
 
     private fun changeShowText(text: String, color: Int = Color.BLACK) {
@@ -166,12 +173,26 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         player.release()
+        pusher.release()
     }
 
     private fun getExternalStorageDemoMp4Path(): String {
         return "rtmp://live.hkstv.hk.lxdns.com/live/hks"
 //        return Environment.getExternalStorageDirectory().absolutePath + "/Download/demo.mp4"
     }
+
+    fun switchCamera() {
+        pusher.switchCamera()
+    }
+
+    fun startPush(path: String) {
+        pusher.startPush(path)
+    }
+
+    fun stopPush() {
+        pusher.stopPush()
+    }
+
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
