@@ -1,9 +1,7 @@
 package com.study.ndk22_compile_study.push
 
 import android.app.Activity
-import android.hardware.Camera
 import android.view.SurfaceHolder
-import android.view.View
 
 class Pusher(
     activity: Activity,
@@ -67,7 +65,7 @@ class Pusher(
     // 释放资源
     external fun native_release()
 
-    // 视频发送数据到native层
+    // 视频发送数据到native层，NV21格式
     external fun native_pushVideo(data: ByteArray?)
 
     // 视频初始化x264编码器

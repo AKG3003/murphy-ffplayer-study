@@ -17,7 +17,6 @@ import com.study.ndk22_compile_study.databinding.ActivityMainBinding
 import com.study.ndk22_compile_study.player.PlayerErrorListener
 import com.study.ndk22_compile_study.player.PlayerProgressListener
 import com.study.ndk22_compile_study.player.PlayerStateListener
-import com.study.ndk22_compile_study.push.CameraHelper
 import com.study.ndk22_compile_study.push.Pusher
 
 class MainActivity : AppCompatActivity() {
