@@ -29,7 +29,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED ${SOURCES})
 #add_subdirectory(${CMAKE_SOURCE_DIR}/libget)
 
 add_subdirectory(librtmp)
-include_directories(librtmp libx264)
+include_directories(librtmp libx264 libfaac)
 
 #set(X264DIR ${CMAKE_SOURCE_DIR}/../jniLibs/${STUDY_ABI})
 #message(X264DIR: ${X264DIR})
@@ -60,4 +60,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         OpenSLES
         rtmp
         x264
+        faac
 )

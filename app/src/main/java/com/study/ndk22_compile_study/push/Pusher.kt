@@ -18,7 +18,7 @@ class Pusher(
         }
     }
 
-    private var audioChannel: AudioChannel = AudioChannel()
+    private var audioChannel: AudioChannel = AudioChannel(this)
     private var videoChannel: VideoChannel = VideoChannel(this, activity, cameraId, width, height, fps, bitRate)
 
     // 1.初始化native层的需要加载。
@@ -70,4 +70,13 @@ class Pusher(
 
     // 视频初始化x264编码器
     external fun native_initVideoEncoder(width: Int, height: Int, fps: Int, bitRate: Int)
+
+    // 音频初始化faac编码器
+    external fun native_initAudioEncoder(i: Int, channels: Int)
+
+    // 获取音频采样率
+    external fun native_getInpushSamples(): Int
+
+    // 音频发送数据到native层
+    external fun native_pushAudio(buffer: ByteArray, len: Int)
 }

@@ -233,11 +233,15 @@ void LiveVideoChannel::setFrame(int type, int i_payload, uint8_t *p_payload) {
     // 封包
     packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
     packet->m_nBodySize = body_size;
-    packet->m_nChannel = 0x04;
+    packet->m_nChannel = 0x04;//或许不应该选择4 0x05
     packet->m_nTimeStamp = RTMP_GetTime();
     packet->m_hasAbsTimestamp = 0;
     packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
 
-        videoCallback(packet);
+    videoCallback(packet);
+
+}
+
+void LiveVideoChannel::release() {
 
 }

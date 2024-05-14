@@ -4,10 +4,8 @@
 #include <pthread.h>
 #include "LogUtil.h"
 #include <string.h>
-extern "C" {
-#include "rtmp.h"
+#include <rtmp.h>
 #include <x264.h>
-}
 
 typedef void (*VideoCallback)(RTMPPacket *packet);
 class LiveVideoChannel {
@@ -42,6 +40,8 @@ public:
     void setVideoCallback(VideoCallback videoCallback);
 
     void setFrame(int type, int i_payload, uint8_t *p_payload);
+
+    void release();
 };
 
 

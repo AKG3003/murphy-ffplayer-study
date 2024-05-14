@@ -3,12 +3,12 @@
 #include <string>
 #include "LogUtil.h"
 #include "LiveVideoChannel.h"
+#include "LiveAudioChannel.h"
 #include "SafeQueue.h"
-
-extern "C" {
+// 不需要加extern"C"是因为他们内部已经做了处理
 #include <rtmp.h>
 #include <x264.h>
-}
+
 
 #define NELEM(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -16,9 +16,11 @@ extern "C" {
 // env是线程相关的，不能跨线程使用。
 JavaVM *g_javaVM = nullptr;
 LiveVideoChannel *videoChannel = nullptr;
+LiveAudioChannel *audioChannel = nullptr;
 bool isStart = false;
 pthread_t *pid_start;
 bool isReady = false;
+bool isAudioReady = false;
 SafeQueue<RTMPPacket *> packets; //rtmp包队列，不区分音频视频，start直接拿出去给流媒体服务器。
 
 void release_packets(RTMPPacket **packet) {
@@ -83,6 +85,9 @@ void *start_thread_func(void *args) {
 
         // 准备好了，可以开始向服务器推流了。
         isReady = true;
+
+        // 音频准备好了，添加音频头
+        audioChannel->addAudioHeader();
 
         // 队列开始工作
         packets.setWork(1);
@@ -157,14 +162,26 @@ do_start(JNIEnv *env, jobject /* this */, jstring path) {
 
     env->ReleaseStringUTFChars(path, url);
 
-    pthread_t pid;
-
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 do_stop(JNIEnv *env, jobject /* this */) {
-
+    isStart = false;
+    isReady = false;
+    packets.setWork(0);
+    packets.clear();
+    pthread_join(*pid_start, nullptr);
+    if (videoChannel) {
+        videoChannel->release();
+        delete videoChannel;
+        videoChannel = nullptr;
+    }
+    if (audioChannel) {
+        audioChannel->release();
+        delete audioChannel;
+        audioChannel = nullptr;
+    }
 }
 
 extern "C"
@@ -198,6 +215,38 @@ do_initVideoEncoder(JNIEnv *env, jobject /* this */, jint width, jint height, ji
 
 }
 
+extern "C"
+JNIEXPORT void JNICALL
+do_initAudioEncoder(JNIEnv *env, jobject /* this */, jint sampleRateInHz, jint channels) {
+    // 初始化音频编码器
+    if (audioChannel) {
+        audioChannel->initAudioEncoder(sampleRateInHz, channels);
+    }
+    audioChannel->setVideoCallback(rtmp_callback);
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+do_push_audio(JNIEnv *env, jobject /* this */, jbyteArray data, jint len) {
+    // 往队列里面加入RTMP包，必须经过faac编码
+    if (!audioChannel||!isAudioReady) {
+        return;
+    }
+    if (audioChannel) {
+        jbyte *audio_data = env->GetByteArrayElements(data, nullptr);
+        audioChannel->encodeData(reinterpret_cast<int32_t *>(audio_data));
+        env->ReleaseByteArrayElements(data, audio_data, 0);
+    }
+}
+
+extern "C"
+JNIEXPORT jint JNICALL
+do_get_input_samples(JNIEnv *env, jobject /* this */) {
+    // 获取音频输入样本数
+    if (audioChannel) {
+        return audioChannel->getInputSamples();
+    }
+}
 
 static const JNINativeMethod gMethods[] = {
         {"native_init",             "()V",                   (void *) do_init},
@@ -206,6 +255,10 @@ static const JNINativeMethod gMethods[] = {
         {"native_release",          "()V",                   (void *) do_release},
         {"native_pushVideo",        "([B)V",                 (void *) do_pushVideo},
         {"native_initVideoEncoder", "(IIII)V",               (void *) do_initVideoEncoder},
+        {"native_initAudioEncoder", "(II)V",                 (void *) do_initAudioEncoder},
+        {"native_pushAudio",        "([BI)V",                 (void *) do_push_audio},
+        {"native_getInpushSamples",  "()I",                 (void *) do_get_input_samples},
+
 };
 
 // 通过JNI_OnLoad函数动态注册
